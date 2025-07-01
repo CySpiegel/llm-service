@@ -32,6 +32,9 @@ services:
         limits:
           cpus: '8.0'
           memory: 16G
+        reservations:
+          devices:
+            - capabilities: [gpu]
     logging:
       driver: json-file
       options:
@@ -39,11 +42,6 @@ services:
         max-file: "5"
     networks:
       - llm-service
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
 
   postgres:
     image: postgres:16-alpine
