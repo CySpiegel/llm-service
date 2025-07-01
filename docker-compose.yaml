@@ -1,0 +1,117 @@
+version: '3.9'
+
+networks:
+  llm-service:
+    driver: bridge
+
+services:
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:cuda
+    container_name: open-webui
+    restart: always
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DATABASE_URL=postgresql://openwebui:strongpassword@postgres:5432/openwebui
+      - REDIS_URL=redis://redis:6379
+      - QDRANT_URL=http://qdrant:6333
+      - ENABLE_PERSISTENT_CONFIG=false
+      - ENABLE_AUTOCOMPLETE=false
+      - ENABLE_TAGS_GENERATION=false
+      - ENABLE_RETRIEVAL_QUERY_GENERATION=false
+      - MAX_CONTEXT_WINDOW=4096
+      - REDIS_TTL_SECONDS=3600
+    ports:
+      - 3000:8080
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 16G
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+    networks:
+      - llm-service
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: openwebui
+      POSTGRES_PASSWORD: strongpassword
+      POSTGRES_DB: openwebui
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - llm-service
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - llm-service
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: qdrant
+    restart: always
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+    networks:
+      - llm-service
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
