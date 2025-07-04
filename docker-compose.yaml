@@ -1,5 +1,3 @@
-version: '3.9'
-
 networks:
   llm-service:
     driver: bridge
@@ -11,15 +9,13 @@ services:
     container_name: open-webui
     restart: always
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://10.1.11.207:11434
       - DATABASE_URL=postgresql://openwebui:strongpassword@postgres:5432/openwebui
       - REDIS_URL=redis://redis:6379
       - QDRANT_URL=http://qdrant:6333
-      - ENABLE_PERSISTENT_CONFIG=false
       - ENABLE_AUTOCOMPLETE=false
       - ENABLE_TAGS_GENERATION=false
       - ENABLE_RETRIEVAL_QUERY_GENERATION=false
-      - MAX_CONTEXT_WINDOW=4096
       - REDIS_TTL_SECONDS=3600
     ports:
       - 3000:8080
@@ -48,9 +44,9 @@ services:
     container_name: postgres
     restart: always
     environment:
-      POSTGRES_USER: openwebui
-      POSTGRES_PASSWORD: strongpassword
-      POSTGRES_DB: openwebui
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     deploy:
@@ -109,7 +105,50 @@ services:
     networks:
       - llm-service
 
+  vllm:
+      image: vllm/vllm-openai:latest
+      container_name: vllm
+      restart: unless-stopped
+      runtime: nvidia
+      environment:
+        - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}  # Needed if using gated official Meta models!
+      command: >
+        --model meta-llama/Meta-Llama-3-8B-Instruct
+        --host 0.0.0.0
+        --port 8000
+        --dtype float16
+      ports:
+        - "8000:8000"
+      volumes:
+        - ./vllm_cache:/root/.cache/huggingface/hub
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - capabilities: [gpu]
+      networks:
+        - llm-service
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: litellm
+   # volumes:
+   #   - ./litellm_config.yaml:/app/config.yaml # Mount your local config file
+    environment:
+      # Define your API keys as environment variables
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/litellm
+      - UI_USERNAME=${LITELLM_UI_USERNAME}   # username to sign in on UI
+      - UI_PASSWORD=${LITELLM_UI_PASSWORD}        # password to sign in on UI
+    ports:
+      - "4000:4000"
+    networks:
+      - llm-service
+    command: ["--port", "4000"]
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+  vllm_cache:
