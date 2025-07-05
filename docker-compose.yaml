@@ -147,8 +147,188 @@ services:
     command: ["--port", "4000"]
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - llm-service
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./grafana_data:/var/lib/grafana
+    networks:
+      - llm-service
+
+  redis_exporter:
+    image: oliver006/redis_exporter
+    container_name: redis_exporter
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - llm-service
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres_exporter
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    ports:
+      - "9187:9187"
+    networks:
+      - llm-service
+
+  nvidia-dcgm-exporter:
+    image: nvidia/dcgm-exporter:latest
+    container_name: nvidia-dcgm-exporter
+    restart: unless-stopped
+    runtime: nvidia
+    ports:
+      - "9400:9400"
+    networks:
+      - llm-service
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "8088:8080"
+    networks:
+      - llm-service
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  dcgm-exporter:
+    image: nvidia/dcgm-exporter:latest
+    container_name: dcgm-exporter
+    restart: unless-stopped
+    runtime: nvidia
+    ports:
+      - "9450:9400"
+    cap_add:
+      - SYS_ADMIN
+    networks:
+      - llm-service
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - llm-service
+  #   runtime: nvidia
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: [gpu]
+
+  flowise:
+    image: flowiseai/flowise:latest
+    container_name: flowise
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - DATABASE_PATH=/root/.flowise
+    volumes:
+      - ./flowise_data:/root/.flowise
+    networks:
+      - llm-service
+
+  neo4j:
+    image: neo4j:5
+    container_name: neo4j
+    restart: unless-stopped
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+    ports:
+      - "7474:7474"   # Web UI
+      - "7687:7687"   # Bolt protocol
+    volumes:
+      - ./neo4j_data:/data
+    networks:
+      - llm-service
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      - BASE_URL=http://localhost:8082/
+      # Add more settings via env or searxng.settings.yml
+    volumes:
+      - ./searxng_data:/etc/searxng
+    networks:
+      - llm-service
+
+  # caddy:
+  #   image: caddy:latest
+  #   container_name: caddy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   networks:
+  #     - llm-service
+
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    container_name: langfuse
+    restart: unless-stopped
+    ports:
+      - "3003:3000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - NEXTAUTH_SECRET=${LANGFUSE_SECRET}
+    networks:
+      - llm-service
+
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
   vllm_cache:
+  grafana_data:
+  n8n_data:
+  flowise_data:
+  neo4j_data:
+  # ollama_data:
+  searxng_data:
+  # caddy_data:
+  # caddy_config:
