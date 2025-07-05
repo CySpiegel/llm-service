@@ -1,0 +1,63 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'vllm'
+    static_configs:
+      - targets: ['vllm:8000']
+
+  - job_name: 'qdrant'
+    static_configs:
+      - targets: ['qdrant:6333']
+
+  - job_name: 'redis_exporter'
+    static_configs:
+      - targets: ['redis_exporter:9121']
+
+  - job_name: 'postgres_exporter'
+    static_configs:
+      - targets: ['postgres_exporter:9187']
+
+  - job_name: 'gpu'
+    static_configs:
+      - targets: ['nvidia-dcgm-exporter:9400']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'dcgm'
+    static_configs:
+      - targets: ['dcgm-exporter:9401']
+
+  - job_name: 'n8n'
+    static_configs:
+      - targets: ['n8n:5678']
+
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['neo4j:7474']
+
+  - job_name: 'searxng'
+    static_configs:
+      - targets: ['searxng:8080']
+
+  - job_name: 'langfuse'
+    static_configs:
+      - targets: ['langfuse:3000']
+
+  - job_name: 'flowise'
+    static_configs:
+      - targets: ['flowise:3001']
+
+  - job_name: 'open-webui'
+    static_configs:
+      - targets: ['open-webui:8080']
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+
+#  - job_name: 'ollama'
+#    static_configs:
+#      - targets: ['ollama:11434']
