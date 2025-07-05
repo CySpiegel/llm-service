@@ -1,0 +1,5 @@
+model_list:
+  - model_name: llama3-8b-instruct
+    litellm_provider: vllm
+    api_base: http://vllm:8000/v1
+    litellm_params: {}
