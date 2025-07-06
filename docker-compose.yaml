@@ -18,27 +18,39 @@ volumes:
 
 
 services:
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: nginx
-  #   restart: unless-stopped
-  #   ports:
-  #     - "80:80"
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
-  #     - ./certs:/etc/nginx/certs:ro
-  #   command: /bin/sh -c "rm -f /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
-  #   depends_on:
-  #     - open-webui
-  #     - grafana
-  #     - prometheus
-  #     - n8n
-  #     - flowise
-  #     - neo4j
-  #     - searxng
-  #     - langfuse
-  #   networks:
-  #     - llm-service
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "443:443" # open-webui
+      - "8081:8081" # n8n
+      - "8082:8082" # searxng
+      - "8083:8083" # langfuse
+      - "8084:8084" # minio
+      - "8085:8085" # grafana
+      - "8086:8086" # neo4j :8086/browser
+      - "8087:8087" # qdrant
+      - "8088:8088" # LiteLLM
+      - "8089:8089" # Flowise
+      - "8090:8090" # Prometheus
+      - "8091:8091" # ClickHouse HTTP interface
+      #- "6333:6333"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/ssl:ro
+    depends_on:
+      - open-webui
+      - n8n
+      - grafana
+      - flowise
+      - langfuse
+      - prometheus
+      - searxng
+    networks:
+      - llm-service
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:cuda
@@ -48,13 +60,20 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/openwebui
       - REDIS_URL=redis://redis:6379
-      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_URI=http://qdrant:6333
+      - VECTOR_DB=qdrant
+      - QDRANT_ON_DISK=true
+      - QDRANT_PREFER_GRPC=true
+      - QDRANT_GRPC_PORT=6334
+      - ENABLE_QDRANT_MULTITENANCY_MODE=true
       - ENABLE_AUTOCOMPLETE=false
-      - ENABLE_TAGS_GENERATION=false
-      - ENABLE_RETRIEVAL_QUERY_GENERATION=false
+      - ENABLE_TAGS_GENERATION=true
+      - ENABLE_RETRIEVAL_QUERY_GENERATION=true
       - REDIS_TTL_SECONDS=3600
-    ports:
-      - "3000:8080"
+    # ports:
+    #   - "3000:8080"
+    expose:
+      - 8080
     depends_on:
       - postgres
       - redis
@@ -103,10 +122,21 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
     expose:
       - "6379"
     networks:
       - llm-service
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -114,13 +144,16 @@ services:
       retries: 5
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant
     container_name: qdrant
     restart: always
     volumes:
       - qdrant_data:/qdrant/storage
-    ports:
-      - "6333:6333"
+    expose:
+     - "6333" # REST API
+     - "6334" # gRPC
+    # ports:
+    #   - "6333:6333"
     networks:
       - llm-service
     healthcheck:
@@ -141,8 +174,8 @@ services:
       --host 0.0.0.0
       --port 8000
       --dtype float16
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - ./vllm_cache:/root/.cache/huggingface/hub
     deploy:
@@ -161,8 +194,8 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/litellm
       - UI_USERNAME=${LITELLM_UI_USERNAME}
       - UI_PASSWORD=${LITELLM_UI_PASSWORD}
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     networks:
       - llm-service
     command: ["--port", "4000"]
@@ -174,8 +207,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
+    expose:
+      - "9090"
     networks:
       - llm-service
     healthcheck:
@@ -190,14 +223,14 @@ services:
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-    ports:
-      - "3100:3000"
+    expose:
+      - "3000"
     volumes:
       - ./grafana_data:/var/lib/grafana
     networks:
       - llm-service
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3100/"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -208,8 +241,8 @@ services:
     restart: unless-stopped
     environment:
       - REDIS_ADDR=redis://redis:6379
-    ports:
-      - "9121:9121"
+    expose:
+      - "9121"
     networks:
       - llm-service
 
@@ -219,8 +252,8 @@ services:
     restart: unless-stopped
     environment:
       - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-    ports:
-      - "9187:9187"
+    expose:
+      - "9187"
     networks:
       - llm-service
 
@@ -229,8 +262,8 @@ services:
     container_name: nvidia-dcgm-exporter
     restart: unless-stopped
     runtime: nvidia
-    ports:
-      - "9400:9400"
+    expose:
+      - "9400"
     networks:
       - llm-service
 
@@ -239,8 +272,8 @@ services:
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     networks:
       - llm-service
     volumes:
@@ -254,8 +287,8 @@ services:
     container_name: dcgm-exporter
     restart: unless-stopped
     runtime: nvidia
-    ports:
-      - "9401:9401"
+    expose:
+      - "9401"
     cap_add:
       - SYS_ADMIN
     networks:
@@ -287,8 +320,8 @@ services:
     image: flowiseai/flowise:latest
     container_name: flowise
     restart: unless-stopped
-    ports:
-      - "3001:3001"
+    expose:
+      - "3000"
     environment:
       - DATABASE_PATH=/root/.flowise
     volumes:
@@ -297,14 +330,17 @@ services:
       - llm-service
 
   neo4j:
-    image: neo4j:5
+    image: neo4j:latest
     container_name: neo4j
     restart: unless-stopped
     environment:
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+      - dbms.usage_report.enabled=false
+    expose:
+      - "7474"
+      - "7687"
     ports:
-      - "7474:7474"
-      - "7687:7687"
+    - "7687:7687"
     volumes:
       - ./neo4j_data:/data
     networks:
@@ -314,10 +350,10 @@ services:
     image: searxng/searxng:latest
     container_name: searxng
     restart: unless-stopped
-    ports:
-      - "8082:8080"
+    expose:
+      - "8080"
     environment:
-      - BASE_URL=http://localhost:8082/
+      - BASE_URL=http://localhost:8080/
     volumes:
       - ./searxng_data:/etc/searxng
     networks:
@@ -337,8 +373,8 @@ services:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
-    ports:
-      - "5678:5678"
+    expose:
+      - "5678"
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
@@ -352,9 +388,11 @@ services:
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    expose:
+      - "9000" 
+      - "9001" # MinIO WebInterfase
     ports:
-      - "9100:9000"
-      - "9101:9001"
+      - "9100:9000"  # MinIO API
     volumes:
       - ./minio_data:/data
     networks:
@@ -419,8 +457,8 @@ services:
       - minio
       - redis
       - clickhouse
-    ports:
-      - "3003:3000"
+    expose:
+      - "3000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${LANGFUSE_DB}
       SALT: ${LANGFUSE_SALT}
@@ -478,10 +516,10 @@ services:
     container_name: clickhouse
     restart: unless-stopped
     user: "101:101"
-    ports:
-      - "8123:8123"   # HTTP interface
-      - "9000:9000"   # Native TCP interface
-      - "9009:9009"   # Inter-server communication
+    expose:
+      - "8123"   # HTTP interface
+      - "9000"   # Native TCP interface
+      - "9009"   # Inter-server communication
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
