@@ -65,6 +65,7 @@ services:
       - QDRANT_ON_DISK=true
       - QDRANT_PREFER_GRPC=true
       - QDRANT_GRPC_PORT=6334
+      - QDRANT_COLLECTION_PREFIX=open-webui
       - ENABLE_QDRANT_MULTITENANCY_MODE=true
       - ENABLE_AUTOCOMPLETE=false
       - ENABLE_TAGS_GENERATION=true
