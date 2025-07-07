@@ -11,12 +11,35 @@ volumes:
   n8n_data:
   flowise_data:
   neo4j_data:
-#  ollama_data:
   searxng_data:
   clickhouse_data:
   clickhouse_logs:
 
-
+# This is a Docker Compose file for deploying a set of services related to LLM (Large Language Model) applications.
+# It includes services for web UI, databases, vector databases, monitoring, and more.
+# The services are designed to work together in a network called 'llm-service'.
+# The file uses environment variables for configuration, which should be defined in a .env file or in the environment where this Docker Compose file is run.
+# Make sure to set the necessary environment variables before running this file.
+# The services include:
+# - nginx: A reverse proxy server to route traffic to the appropriate services.
+# - open-webui: A web UI for interacting with LLMs.
+# - postgres: A PostgreSQL database for storing application data.
+# - redis: A Redis instance for caching and message brokering.
+# - qdrant: A vector database for similarity search.
+# - vllm: A high-performance inference engine for LLMs.
+# - litellm: A lightweight LLM management service.
+# - prometheus: A monitoring and alerting toolkit.
+# - grafana: A visualization tool for monitoring data.
+# - redis_exporter: An exporter for Redis metrics.
+# - postgres_exporter: An exporter for PostgreSQL metrics.
+# - nvidia-dcgm-exporter: An exporter for NVIDIA GPU metrics.
+# - cadvisor: A container monitoring tool.
+# - dcgm-exporter: An NVIDIA Data Center GPU Manager exporter.
+# - ollama: A service for running LLMs (optional, requires NVIDIA runtime).
+# - flowise: A service for building and deploying LLM applications.
+# - neo4j: A graph database for storing and querying graph data.
+# - searxng: A privacy-respecting metasearch engine.
+# - n8n: A workflow automation tool.
 services:
   nginx:
     image: nginx:alpine
@@ -35,8 +58,6 @@ services:
       - "8089:8089" # Flowise
       - "8090:8090" # Prometheus
       - "8091:8091" # ClickHouse HTTP interface
-      #- "6333:6333"
-
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
@@ -143,7 +164,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-
+  
+  # Qdrant is a high-performance vector database designed for similarity search and nearest neighbor search on high-dimensional data.
+  # - Official docs: https://qdrant.tech/documentation/
+  # - REST API: Port 6333
+  # - gRPC API: Port 6334
+  #
+  # Features:
+  #   - Supports multiple vector indexing methods (HNSW, FAISS, Annoy)
+  #   - Offers both on-disk and in-memory storage options
+  #   - Client libraries available for Python, JavaScript, Go, Rust, and more
+  #
+  # Note:
+  #   - For GPU acceleration, ensure NVIDIA Container Toolkit is installed and the NVIDIA runtime is enabled.
+  #   - Configure the storage backend and index type based on your performance requirements.
   qdrant:
     image: qdrant/qdrant
     container_name: qdrant
@@ -153,8 +187,6 @@ services:
     expose:
      - "6333" # REST API
      - "6334" # gRPC
-    # ports:
-    #   - "6333:6333"
     networks:
       - llm-service
     healthcheck:
@@ -163,6 +195,12 @@ services:
       timeout: 10s
       retries: 5
 
+  # Make sure to have the NVIDIA Container Toolkit installed
+  # If you want to use vLLM, ensure that the NVIDIA runtime is available and configured
+  # properly on your Docker host.
+  # vLLM is a high-performance inference engine for large language models.
+  # It supports models from Hugging Face and other sources.
+  # For more information, visit https://vllm.ai/
   vllm:
     image: vllm/vllm-openai:latest
     container_name: vllm
@@ -300,22 +338,27 @@ services:
           devices:
             - capabilities: [gpu]
 
-#  ollama:
-#    image: ollama/ollama:latest
-#    container_name: ollama
-#    restart: unless-stopped
-#    expose:
-#      - "11434"
-#    volumes:
-#      - ollama_data:/root/.ollama
-#    networks:
-#      - llm-service
-#    runtime: nvidia
-#    deploy:
-#      resources:
-#        reservations:
-#          devices:
-#            - capabilities: [gpu]
+  # Uncomment the following section if you want to use Ollama
+  # Note: Ollama requires a GPU and the NVIDIA runtime.
+  # Make sure to have the NVIDIA Container Toolkit installed.
+  # If you want to use Ollama, ensure that the NVIDIA runtime is available and configured
+  # properly on your Docker host.
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   expose:
+  #     - "11434"
+  #   volumes:
+  #     - ./ollama_data:/root/.ollama
+  #   networks:
+  #     - llm-service
+  #   runtime: nvidia
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: [gpu]
 
   flowise:
     image: flowiseai/flowise:latest
